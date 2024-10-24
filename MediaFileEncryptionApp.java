@@ -9,29 +9,48 @@ import java.awt.event.ActionListener;
 import java.io.File;
 import java.nio.file.Files;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 
 public class MediaFileEncryptionApp extends JFrame {
-    private JTextField selectedFilePath;
+    private JTextField selectedKeyImagePath;
+    private JTextField selectedKeyAudioPath;
+    private JTextField selectedFileForEncryptionPath;  // Şifrelemek için başka dosya
     private JTextArea encryptedTextArea;
     private JLabel decryptedImageLabel;
     private JButton playDecryptedAudioButton;
     private JComboBox<String> securityLevelComboBox; // Güvenlik seviyesi seçimi için
-    private SecretKey aesKey;
+    private SecretKey encryptionKey; // Şifreleme için kullanılacak anahtar
+    private SecretKey decryptionKey; // Şifre çözme için kullanılacak anahtar
     private boolean isAudioFile = false; // Ses dosyası mı, kontrol için
-    private byte[] lastFileHash; // Aynı dosyanın kullanıldığını kontrol etmek için hash saklanacak
+    private String currentSecurityLevel; // Mevcut güvenlik seviyesi (AES-128, AES-192, AES-256)
+
+    // Şifreleme ve şifre çözme anahtarlarını göstermek için alanlar
+    private JTextArea encryptionKeyArea;
+    private JTextArea decryptionKeyArea;
 
     public MediaFileEncryptionApp() {
         // GUI bileşenlerini oluştur
         setTitle("Media File Encryption App");
         setLayout(new FlowLayout());
 
-        // Dosya seçme butonu
-        JButton selectFileButton = new JButton("Dosya Seç (Görüntü/Ses)");
-        selectedFilePath = new JTextField(30);
-        add(selectFileButton);
-        add(selectedFilePath);
+        // Anahtar oluşturmak için kullanılacak dosyalar (görüntü ve ses)
+        JButton selectKeyImageButton = new JButton("Anahtar için Görüntü Dosyası Seç");
+        selectedKeyImagePath = new JTextField(30);
+        add(selectKeyImageButton);
+        add(selectedKeyImagePath);
+
+        JButton selectKeyAudioButton = new JButton("Anahtar için Ses Dosyası Seç");
+        selectedKeyAudioPath = new JTextField(30);
+        add(selectKeyAudioButton);
+        add(selectedKeyAudioPath);
+
+        // Şifreleme için başka dosya seçimi (görsel ya da ses)
+        JButton selectFileForEncryptionButton = new JButton("Şifrelenecek Dosyayı Seç");
+        selectedFileForEncryptionPath = new JTextField(30);
+        add(selectFileForEncryptionButton);
+        add(selectedFileForEncryptionPath);
 
         // Güvenlik seviyesi seçimi
         String[] securityLevels = {"AES-128", "AES-192", "AES-256"};
@@ -39,9 +58,23 @@ public class MediaFileEncryptionApp extends JFrame {
         add(new JLabel("Güvenlik Seviyesi Seçin:"));
         add(securityLevelComboBox);
 
-        // Anahtar üret butonu
-        JButton generateKeyButton = new JButton("Anahtar Üret");
-        add(generateKeyButton);
+        // Şifreleme anahtar üret butonu
+        JButton generateEncryptionKeyButton = new JButton("Şifreleme için Anahtar Üret");
+        add(generateEncryptionKeyButton);
+
+        // Şifre çözme anahtar üret butonu
+        JButton generateDecryptionKeyButton = new JButton("Şifre Çözme için Anahtar Üret");
+        add(generateDecryptionKeyButton);
+
+        // Şifreleme anahtarını göstermek için alan
+        encryptionKeyArea = new JTextArea(2, 30);
+        add(new JLabel("Şifreleme Anahtarı:"));
+        add(new JScrollPane(encryptionKeyArea));
+
+        // Şifre çözme anahtarını göstermek için alan
+        decryptionKeyArea = new JTextArea(2, 30);
+        add(new JLabel("Şifre Çözme Anahtarı:"));
+        add(new JScrollPane(decryptionKeyArea));
 
         // Şifreleme butonu
         JButton encryptButton = new JButton("Dosyayı Şifrele");
@@ -64,19 +97,58 @@ public class MediaFileEncryptionApp extends JFrame {
         playDecryptedAudioButton.setEnabled(false);
         add(playDecryptedAudioButton);
 
-        // Butonlar için event (olay) ekle
-        selectFileButton.addActionListener(new ActionListener() {
+        // Güvenlik seviyesi değiştiğinde butonları ve görselleri sıfırla
+        securityLevelComboBox.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                selectFile();
+                resetUI(); // Arayüzü sıfırla
             }
         });
 
-        generateKeyButton.addActionListener(new ActionListener() {
+        // Butonlar için event (olay) ekle
+        selectKeyImageButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                selectFile(selectedKeyImagePath, "Anahtar için Görüntü Dosyası Seç");
+            }
+        });
+
+        selectKeyAudioButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                selectFile(selectedKeyAudioPath, "Anahtar için Ses Dosyası Seç");
+            }
+        });
+
+        selectFileForEncryptionButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                selectFile(selectedFileForEncryptionPath, "Şifrelenecek Dosyayı Seç");
+            }
+        });
+
+        generateEncryptionKeyButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
-                    generateKeyFromFile();  // Anahtar üretimi için görüntü/ses dosyasını kullan
+                    encryptionKey = generateKeyFromFiles();  // Şifreleme için anahtar üret
+                    encryptionKeyArea.setText(keyToBase64(encryptionKey)); // Şifreleme anahtarını ekranda göster
+                    currentSecurityLevel = (String) securityLevelComboBox.getSelectedItem(); // Mevcut güvenlik seviyesini kaydet
+                    JOptionPane.showMessageDialog(null, "Şifreleme için anahtar başarıyla üretildi.");
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(null, "Anahtar üretimi sırasında hata oluştu!");
+                }
+            }
+        });
+
+        generateDecryptionKeyButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    decryptionKey = generateKeyFromFiles();  // Şifre çözme için anahtar üret
+                    decryptionKeyArea.setText(keyToBase64(decryptionKey)); // Şifre çözme anahtarını ekranda göster
+                    currentSecurityLevel = (String) securityLevelComboBox.getSelectedItem(); // Mevcut güvenlik seviyesini kaydet
+                    JOptionPane.showMessageDialog(null, "Şifre çözme için anahtar başarıyla üretildi.");
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Anahtar üretimi sırasında hata oluştu!");
                 }
@@ -87,9 +159,12 @@ public class MediaFileEncryptionApp extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
-                    encryptFile();
+                    if (!isValidKeyForSelectedSecurityLevel(encryptionKey)) {
+                        throw new Exception("Seçilen güvenlik seviyesi için geçerli bir anahtar oluşturulmadı!");
+                    }
+                    encryptFile();  // Şifreleme işlemi
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(null, "Şifreleme işlemi sırasında hata oluştu!");
+                    JOptionPane.showMessageDialog(null, "Şifreleme işlemi sırasında hata oluştu: " + ex.getMessage());
                 }
             }
         });
@@ -98,9 +173,12 @@ public class MediaFileEncryptionApp extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
-                    decryptFile();
+                    if (!isValidKeyForSelectedSecurityLevel(decryptionKey)) {
+                        throw new Exception("Seçilen güvenlik seviyesi için geçerli bir anahtar oluşturulmadı!");
+                    }
+                    decryptFile();  // Şifre çözme işlemi
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(null, "Şifre çözme işlemi sırasında hata oluştu!");
+                    JOptionPane.showMessageDialog(null, "Şifre çözme işlemi sırasında hata oluştu: " + ex.getMessage());
                 }
             }
         });
@@ -114,44 +192,50 @@ public class MediaFileEncryptionApp extends JFrame {
             }
         });
 
-        setSize(500, 700);
+        setSize(600, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setVisible(true);
     }
 
     // Dosya seçimi için JFileChooser kullan
-    private void selectFile() {
+    private void selectFile(JTextField textField, String dialogTitle) {
         JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle(dialogTitle);
         int returnValue = fileChooser.showOpenDialog(null);
         if (returnValue == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
-            selectedFilePath.setText(selectedFile.getAbsolutePath());
+            textField.setText(selectedFile.getAbsolutePath());
 
-            // Dosyanın uzantısına bakarak görüntü mü ses mi olduğunu kontrol et
+            // Eğer ses dosyasıysa, kontrol et
             String fileName = selectedFile.getName().toLowerCase();
-            if (fileName.endsWith(".png") || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-                isAudioFile = false;
-                decryptedImageLabel.setText("Çözülmüş görüntü burada görünecek");
-                playDecryptedAudioButton.setEnabled(false);
-            } else if (fileName.endsWith(".wav") || fileName.endsWith(".mp3") || fileName.endsWith(".m4a")) {
+            if (fileName.endsWith(".wav") || fileName.endsWith(".mp3") || fileName.endsWith(".m4a")) {
                 isAudioFile = true;
-                decryptedImageLabel.setText("");
-                playDecryptedAudioButton.setEnabled(true);
             } else {
-                JOptionPane.showMessageDialog(null, "Desteklenmeyen dosya türü.");
+                isAudioFile = false;
             }
         }
     }
 
-    // Dosyadan anahtar üretimi (görüntü/ses dosyasından hash üreterek)
-    private void generateKeyFromFile() throws Exception {
-        String filePath = selectedFilePath.getText();
-        File file = new File(filePath);
-        byte[] fileBytes = Files.readAllBytes(file.toPath());
+    // İki dosyadan anahtar üretimi (görüntü ve ses dosyasından hash üreterek)
+    private SecretKey generateKeyFromFiles() throws Exception {
+        String imagePath = selectedKeyImagePath.getText();
+        String audioPath = selectedKeyAudioPath.getText();
+        if (imagePath.isEmpty() || audioPath.isEmpty()) {
+            throw new Exception("Lütfen hem görüntü hem de ses dosyasını seçin.");
+        }
 
-        // SHA-256 hash üret (görüntü/ses dosyasından)
+        // Görüntü ve ses dosyalarını oku
+        byte[] imageBytes = Files.readAllBytes(new File(imagePath).toPath());
+        byte[] audioBytes = Files.readAllBytes(new File(audioPath).toPath());
+
+        // Görüntü ve ses dosyasını birleştir
+        byte[] combinedBytes = new byte[imageBytes.length + audioBytes.length];
+        System.arraycopy(imageBytes, 0, combinedBytes, 0, imageBytes.length);
+        System.arraycopy(audioBytes, 0, combinedBytes, imageBytes.length, audioBytes.length);
+
+        // SHA-256 hash üret (görüntü ve ses dosyasından)
         MessageDigest shaDigest = MessageDigest.getInstance("SHA-256");
-        byte[] keyBytes = shaDigest.digest(fileBytes);
+        byte[] keyBytes = shaDigest.digest(combinedBytes);
 
         // Güvenlik seviyesini seç (AES-128, AES-192, AES-256)
         String selectedSecurityLevel = (String) securityLevelComboBox.getSelectedItem();
@@ -166,25 +250,65 @@ public class MediaFileEncryptionApp extends JFrame {
         keyBytes = Arrays.copyOf(keyBytes, keySize);
 
         // AES anahtarını üret
-        aesKey = new SecretKeySpec(keyBytes, "AES");
+        return new SecretKeySpec(keyBytes, "AES");
+    }
 
-        JOptionPane.showMessageDialog(null, selectedSecurityLevel + " güvenlik seviyesinde anahtar başarıyla üretildi.");
+    // SecretKey'i Base64 stringe dönüştürmek
+    private String keyToBase64(SecretKey key) {
+        return Base64.getEncoder().encodeToString(key.getEncoded());
+    }
+
+    // Seçilen güvenlik seviyesiyle ilgili geçerli bir anahtarın oluşturulup oluşturulmadığını kontrol eder
+    private boolean isValidKeyForSelectedSecurityLevel(SecretKey key) {
+        if (key == null) {
+            return false;
+        }
+        String selectedSecurityLevel = (String) securityLevelComboBox.getSelectedItem();
+        int requiredKeySize = 16; // Default AES-128
+        if ("AES-192".equals(selectedSecurityLevel)) {
+            requiredKeySize = 24;
+        } else if ("AES-256".equals(selectedSecurityLevel)) {
+            requiredKeySize = 32;
+        }
+        return key.getEncoded().length == requiredKeySize;
+    }
+
+    // Güvenlik seviyesi değiştirildiğinde butonları ve görselleri sıfırla
+    private void resetUI() {
+        // Daha önce aktif olan butonları ve görselleri sıfırla
+        decryptedImageLabel.setIcon(null);
+        decryptedImageLabel.setText("Çözülmüş görüntü burada görünecek");
+        playDecryptedAudioButton.setEnabled(false);
+        encryptedTextArea.setText("");
+        encryptionKeyArea.setText("");
+        decryptionKeyArea.setText("");
+        JOptionPane.showMessageDialog(null, "Güvenlik seviyesi değiştirildi, lütfen yeni bir anahtar üretin.");
     }
 
     // Şifreleme işlemi
     private void encryptFile() throws Exception {
-        String filePath = selectedFilePath.getText();
+        if (encryptionKey == null) {
+            throw new Exception("Lütfen önce şifreleme için anahtar üretin.");
+        }
+        String filePath = selectedFileForEncryptionPath.getText();  // Şifreleme işlemi için farklı dosya kullan
         byte[] fileBytes = Files.readAllBytes(new File(filePath).toPath());
 
-        byte[] iv = new byte[16]; // Basit IV değeri
+        // Rastgele IV oluştur
+        byte[] iv = new byte[16];
+        new SecureRandom().nextBytes(iv);  // Güvenli IV üret
         IvParameterSpec ivspec = new IvParameterSpec(iv);
 
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.ENCRYPT_MODE, aesKey, ivspec);
+        cipher.init(Cipher.ENCRYPT_MODE, encryptionKey, ivspec);
         byte[] encryptedBytes = cipher.doFinal(fileBytes);
 
+        // IV'yi ve şifrelenmiş veriyi birleştir
+        byte[] combinedData = new byte[iv.length + encryptedBytes.length];
+        System.arraycopy(iv, 0, combinedData, 0, iv.length);
+        System.arraycopy(encryptedBytes, 0, combinedData, iv.length, encryptedBytes.length);
+
         // Şifrelenmiş veriyi Base64 formatına çevir ve textarea'ya yaz
-        String encryptedData = Base64.getEncoder().encodeToString(encryptedBytes);
+        String encryptedData = Base64.getEncoder().encodeToString(combinedData);
         encryptedTextArea.setText(encryptedData);
 
         JOptionPane.showMessageDialog(null, "Şifreleme işlemi tamamlandı.");
@@ -192,28 +316,33 @@ public class MediaFileEncryptionApp extends JFrame {
 
     // Şifre çözme işlemi
     private void decryptFile() throws Exception {
+        if (decryptionKey == null) {
+            throw new Exception("Lütfen önce şifre çözme için anahtar üretin.");
+        }
         String encryptedData = encryptedTextArea.getText();
-        byte[] encryptedBytes = Base64.getDecoder().decode(encryptedData);
+        byte[] combinedData = Base64.getDecoder().decode(encryptedData);
 
-        byte[] iv = new byte[16]; // Basit IV değeri
+        // IV'yi şifrelenmiş veriden çıkar
+        byte[] iv = Arrays.copyOfRange(combinedData, 0, 16);
+        byte[] encryptedBytes = Arrays.copyOfRange(combinedData, 16, combinedData.length);
         IvParameterSpec ivspec = new IvParameterSpec(iv);
 
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.DECRYPT_MODE, aesKey, ivspec);
+        cipher.init(Cipher.DECRYPT_MODE, decryptionKey, ivspec);
         byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
 
-        // Eğer görüntü dosyasıysa, görüntüyü göster
-        if (!isAudioFile) {
+        // Eğer ses dosyasıysa, ses dosyasını geçici olarak sakla
+        if (isAudioFile) {
+            File tempFile = new File("decrypted_audio.wav");
+            Files.write(tempFile.toPath(), decryptedBytes);
+            JOptionPane.showMessageDialog(null, "Şifre çözme işlemi tamamlandı, sesi çalabilirsiniz.");
+            playDecryptedAudioButton.setEnabled(true); // Şifre çözülmüş ses dosyasını çal butonunu aktif hale getir
+        } else {
+            // Eğer görüntü dosyasıysa, görüntüyü göster
             ImageIcon imageIcon = new ImageIcon(decryptedBytes);
             decryptedImageLabel.setIcon(imageIcon);
             decryptedImageLabel.setText("");
             playDecryptedAudioButton.setEnabled(false);
-        } else {
-            // Eğer ses dosyasıysa, ses dosyasını geçici olarak sakla
-            File tempFile = new File("decrypted_audio.wav");
-            Files.write(tempFile.toPath(), decryptedBytes);
-            JOptionPane.showMessageDialog(null, "Şifre çözme işlemi tamamlandı, sesi çalabilirsiniz.");
-            playDecryptedAudioButton.setEnabled(true);
         }
     }
 
