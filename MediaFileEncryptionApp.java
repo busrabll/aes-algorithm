@@ -118,6 +118,7 @@ public class MediaFileEncryptionApp extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 selectFile(selectedKeyImagePath, "Anahtar için Görüntü Dosyası Seç");
+                resetUI();  // Anahtar dosyası değiştiğinde her şeyi sıfırla
             }
         });
 
@@ -125,6 +126,7 @@ public class MediaFileEncryptionApp extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 selectFile(selectedKeyAudioPath, "Anahtar için Ses Dosyası Seç");
+                resetUI();  // Anahtar dosyası değiştiğinde her şeyi sıfırla
             }
         });
 
@@ -132,6 +134,11 @@ public class MediaFileEncryptionApp extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 selectFile(selectedFileForEncryptionPath, "Şifrelenecek Dosyayı Seç");
+                encryptedTextArea.setText("");  // Yeni dosya seçildiğinde önceki şifrelenmiş veriyi sıfırla
+                // Yeni dosya seçildiğinde şifre çözülmüş veriyi de sıfırla
+                decryptedImageLabel.setIcon(null);
+                decryptedImageLabel.setText("Çözülmüş görüntü burada görünecek");
+                playDecryptedAudioButton.setEnabled(false);
             }
         });
 
