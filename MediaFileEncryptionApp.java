@@ -25,6 +25,7 @@ public class MediaFileEncryptionApp extends JFrame {
     private SecretKey decryptionKey; // Şifre çözme için kullanılacak anahtar
     private boolean isAudioFile = false; // Ses dosyası mı, kontrol için
     private String currentSecurityLevel; // Mevcut güvenlik seviyesi (AES-128, AES-192, AES-256)
+    private boolean isKeyGenerated = false;  // Anahtar oluşturulup oluşturulmadığını kontrol eden bayrak
 
     // Şifreleme ve şifre çözme anahtarlarını göstermek için alanlar
     private JTextArea encryptionKeyArea;
@@ -101,7 +102,13 @@ public class MediaFileEncryptionApp extends JFrame {
         securityLevelComboBox.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                resetUI(); // Arayüzü sıfırla
+                if (isKeyGenerated) {
+                    resetUI();  // Eğer anahtar üretildiyse, sıfırla ve uyarı ver
+                    JOptionPane.showMessageDialog(null, 
+                        "Güvenlik seviyesi " + securityLevelComboBox.getSelectedItem() + " olarak değiştirildi. " +
+                        "Lütfen bu güvenlik seviyesi için yeni bir anahtar oluşturun.", 
+                        "Uyarı", JOptionPane.WARNING_MESSAGE);
+                }
                 currentSecurityLevel = (String) securityLevelComboBox.getSelectedItem();  // Güvenlik seviyesini kaydet
             }
         });
@@ -134,6 +141,7 @@ public class MediaFileEncryptionApp extends JFrame {
                 try {
                     encryptionKey = generateKeyFromFiles();  // Şifreleme için anahtar üret
                     encryptionKeyArea.setText(keyToBase64(encryptionKey)); // Şifreleme anahtarını ekranda göster
+                    isKeyGenerated = true;  // Anahtar üretildi bayrağını işaretle
                     JOptionPane.showMessageDialog(null, "Şifreleme için anahtar başarıyla üretildi.");
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Anahtar üretimi sırasında hata oluştu!");
@@ -147,6 +155,7 @@ public class MediaFileEncryptionApp extends JFrame {
                 try {
                     decryptionKey = generateKeyFromFiles();  // Şifre çözme için anahtar üret
                     decryptionKeyArea.setText(keyToBase64(decryptionKey)); // Şifre çözme anahtarını ekranda göster
+                    isKeyGenerated = true;  // Anahtar üretildi bayrağını işaretle
                     JOptionPane.showMessageDialog(null, "Şifre çözme için anahtar başarıyla üretildi.");
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Anahtar üretimi sırasında hata oluştu!");
@@ -285,6 +294,7 @@ public class MediaFileEncryptionApp extends JFrame {
         encryptedTextArea.setText("");
         encryptionKeyArea.setText("");
         decryptionKeyArea.setText("");
+        isKeyGenerated = false;  // Anahtarlar sıfırlandı, anahtar üretim bayrağını sıfırla
     }
 
     // Şifreleme işlemi
