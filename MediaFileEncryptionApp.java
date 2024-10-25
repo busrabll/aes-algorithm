@@ -102,6 +102,7 @@ public class MediaFileEncryptionApp extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 resetUI(); // Arayüzü sıfırla
+                currentSecurityLevel = (String) securityLevelComboBox.getSelectedItem();  // Güvenlik seviyesini kaydet
             }
         });
 
@@ -133,7 +134,6 @@ public class MediaFileEncryptionApp extends JFrame {
                 try {
                     encryptionKey = generateKeyFromFiles();  // Şifreleme için anahtar üret
                     encryptionKeyArea.setText(keyToBase64(encryptionKey)); // Şifreleme anahtarını ekranda göster
-                    currentSecurityLevel = (String) securityLevelComboBox.getSelectedItem(); // Mevcut güvenlik seviyesini kaydet
                     JOptionPane.showMessageDialog(null, "Şifreleme için anahtar başarıyla üretildi.");
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Anahtar üretimi sırasında hata oluştu!");
@@ -147,7 +147,6 @@ public class MediaFileEncryptionApp extends JFrame {
                 try {
                     decryptionKey = generateKeyFromFiles();  // Şifre çözme için anahtar üret
                     decryptionKeyArea.setText(keyToBase64(decryptionKey)); // Şifre çözme anahtarını ekranda göster
-                    currentSecurityLevel = (String) securityLevelComboBox.getSelectedItem(); // Mevcut güvenlik seviyesini kaydet
                     JOptionPane.showMessageDialog(null, "Şifre çözme için anahtar başarıyla üretildi.");
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Anahtar üretimi sırasında hata oluştu!");
@@ -159,6 +158,10 @@ public class MediaFileEncryptionApp extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
+                    // Şifrelenecek dosya yolunu kontrol et
+                    if (selectedFileForEncryptionPath.getText().isEmpty()) {
+                        throw new Exception("Şifrelenecek dosya seçilmedi!");
+                    }
                     if (!isValidKeyForSelectedSecurityLevel(encryptionKey)) {
                         throw new Exception("Seçilen güvenlik seviyesi için geçerli bir anahtar oluşturulmadı!");
                     }
@@ -178,7 +181,7 @@ public class MediaFileEncryptionApp extends JFrame {
                     }
                     decryptFile();  // Şifre çözme işlemi
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(null, "Şifre çözme işlemi sırasında hata oluştu: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(null, "Şifre çözme işlemi sırasında hata oluştu:" + ex.getMessage());
                 }
             }
         });
@@ -282,7 +285,6 @@ public class MediaFileEncryptionApp extends JFrame {
         encryptedTextArea.setText("");
         encryptionKeyArea.setText("");
         decryptionKeyArea.setText("");
-        JOptionPane.showMessageDialog(null, "Güvenlik seviyesi değiştirildi, lütfen yeni bir anahtar üretin.");
     }
 
     // Şifreleme işlemi
